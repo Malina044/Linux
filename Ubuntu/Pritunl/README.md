@@ -1,15 +1,18 @@
 Ниже алгоритм установки openvpn сервера с веб-панелью pritunl и базой mongodb 6.0 на VPS сервер c ОС Ubuntu 22.04 Jammy.
 Подключаем репозиторий для pritunl на Ubuntu 22.04 Jammy:
 
+
 # tee /etc/apt/sources.list.d/pritunl.list << EOF
 deb http://repo.pritunl.com/stable/apt jammy main
 EOF
+
 # apt-key adv --keyserver hkp://keyserver.ubuntu.com --recv 7568D9BB55FF9E5287D586017AE645C0CF8E292A
 Подключаем репозиторий для mongoDB 6.x на Ubuntu 22.04 Jammy:
 
 # tee /etc/apt/sources.list.d/mongodb-org-6.0.list << EOF
 deb https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse
 EOF
+
 # wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
 Обновляем базу пакетов и включаем поддержку wireguard (на всякий случай):
 
@@ -25,7 +28,7 @@ EOF
 # systemctl start mongod pritunl
 Завершаем установку через веб-интерфейс в браузере по IP сервера:
 
-https://server_ip/
+https://127.0.0.1/
 Проверить версию mongodb базы можно командой по ssh:
 
 # mongod --version
