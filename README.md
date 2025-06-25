@@ -1,8 +1,6 @@
 # Linux
 Linux
 <center>
-  <code>
-    # sudo apt install openssh-server
-  </code>
-___________________________
+  <h2>Open SSH</h2>
+  <code># sudo apt install openssh-server</code>
 </center>
